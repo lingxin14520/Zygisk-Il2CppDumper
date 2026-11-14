@@ -1,0 +1,6 @@
+id=zygisk_il2cppdumper_configurable
+name=Zygisk Il2CppDumper Configurable
+version=v1.0.0
+versionCode=1
+author=Perfare and enenH
+description=ARM64 IL2CPP dumper with a runtime target.txt setting.

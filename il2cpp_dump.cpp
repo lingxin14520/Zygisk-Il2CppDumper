@@ -3,6 +3,7 @@
 //
 
 #include "il2cpp_dump.h"
+#include <cerrno>
 #include <dlfcn.h>
 #include <cstdlib>
 #include <cstring>
@@ -11,6 +12,7 @@
 #include <vector>
 #include <sstream>
 #include <fstream>
+#include <sys/stat.h>
 #include <unistd.h>
 #include "xdl.h"
 #include "log.h"
@@ -439,6 +441,11 @@ void il2cpp_api_init(void *handle) {
 }
 
 void il2cpp_dump(const char *outDir) {
+    if (!outDir || !*outDir) {
+        LOGE("App data directory is unavailable");
+        return;
+    }
+
     LOGI("dumping...");
     size_t size;
     auto domain = il2cpp_domain_get();
@@ -512,7 +519,13 @@ void il2cpp_dump(const char *outDir) {
         }
     }
     LOGI("write dump file");
-    std::string outPath = "/data/data/" + std::string(getprogname()) + "/files/dump.cs";
+    std::string filesDir = std::string(outDir) + "/files";
+    if (mkdir(filesDir.c_str(), 0700) != 0 && errno != EEXIST) {
+        LOGE("Unable to create output directory: %s", filesDir.c_str());
+        return;
+    }
+
+    std::string outPath = filesDir + "/dump.cs";
     LOGD("outPath : %s", outPath.c_str());
     std::ofstream outStream(outPath);
     outStream << imageOutput.str();
@@ -521,8 +534,12 @@ void il2cpp_dump(const char *outDir) {
         outStream << outPuts[i];
     }
     outStream.close();
+    if (!outStream) {
+        LOGE("Unable to write dump file: %s", outPath.c_str());
+        return;
+    }
 
-    std::string my_dump_path = "/data/data/" + std::string(getprogname()) + "/files/my_dump.h";
+    std::string my_dump_path = filesDir + "/my_dump.h";
     LOGD("my_dump_path : %s", my_dump_path.c_str());
     std::ofstream my_dump_stream(my_dump_path);
     my_dump_stream << "#pragma once\n";
@@ -530,5 +547,9 @@ void il2cpp_dump(const char *outDir) {
     my_dump_stream << my_dump;
     my_dump_stream << "}\n";
     my_dump_stream.close();
+    if (!my_dump_stream) {
+        LOGE("Unable to write offsets file: %s", my_dump_path.c_str());
+        return;
+    }
     LOGI("dump done!");
 }

@@ -1,21 +1,14 @@
 cmake_minimum_required(VERSION 3.18.1)
 
-set(CMAKE_ANDROID_NDK D:/Android/SDK/ndk/27.0.11718014)
-set(CMAKE_TOOLCHAIN_FILE ${CMAKE_ANDROID_NDK}/build/cmake/android.toolchain.cmake)
-set(CMAKE_SYSTEM_NAME Android)
-set(CMAKE_SYSTEM_VERSION 24)
-set(CMAKE_ANDROID_ARCH_ABI arm64-v8a)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(ANDROID_ABI arm64-v8a)
 set(ANDROID_PLATFORM android-26)
-set(ANDROID_NDK ${CMAKE_ANDROID_NDK})
 
 set(MODULE_NAME zygiskDump)
+project(${MODULE_NAME})
 
-if (NOT DEFINED MODULE_NAME)
-    message(FATAL_ERROR "MODULE_NAME is not set")
-else ()
-    project(${MODULE_NAME})
+if (NOT ANDROID)
+    message(FATAL_ERROR "Set CMAKE_TOOLCHAIN_FILE to the Android NDK's build/cmake/android.toolchain.cmake")
 endif ()
 
 message("Build type: ${CMAKE_BUILD_TYPE}")
@@ -51,8 +44,29 @@ add_library(${MODULE_NAME} SHARED
         il2cpp_dump.cpp
         ${xdl-src})
 target_link_libraries(${MODULE_NAME} log)
+target_link_options(${MODULE_NAME} PRIVATE
+        "-Wl,-z,max-page-size=16384"
+        "-Wl,-z,common-page-size=16384")
 
 if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_custom_command(TARGET ${MODULE_NAME} POST_BUILD
             COMMAND ${CMAKE_STRIP} --strip-all --remove-section=.comment "${CMAKE_CURRENT_BINARY_DIR}/lib${MODULE_NAME}.so")
 endif ()
+
+set(MODULE_STAGE "${CMAKE_CURRENT_BINARY_DIR}/magisk-module")
+file(MAKE_DIRECTORY "${MODULE_STAGE}/zygisk")
+
+add_custom_target(magisk_zip
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/module/module.prop"
+                "${CMAKE_CURRENT_SOURCE_DIR}/module/target.txt"
+                "${CMAKE_CURRENT_SOURCE_DIR}/module/customize.sh"
+                "${MODULE_STAGE}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:${MODULE_NAME}>" "${MODULE_STAGE}/zygisk/arm64-v8a.so"
+        COMMAND ${CMAKE_COMMAND} -E tar cf
+                "${CMAKE_CURRENT_BINARY_DIR}/Zygisk-Il2CppDumper-configurable-arm64.zip"
+                --format=zip module.prop target.txt customize.sh zygisk/arm64-v8a.so
+        WORKING_DIRECTORY "${MODULE_STAGE}"
+        DEPENDS ${MODULE_NAME}
+        VERBATIM)
